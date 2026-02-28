@@ -1,38 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Hand Jump Game - PKS</title>
-  <style>
-    body{
-      margin:0;
-      overflow:hidden;
-      background:#222;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      flex-direction:column;
-      color:white;
-      font-family:Arial;
-    }
-    canvas{
-      background:#87CEEB;
-      border:3px solid white;
-    }
-    video{
-      position:absolute;
-      right:10px;
-      bottom:10px;
-      width:200px;
-      border:2px solid white;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Hand Gesture Runner - PKS</title>
+
+<style>
+body{
+  margin:0;
+  overflow:hidden;
+  background:#111;
+}
+canvas{
+  display:block;
+  background:#87CEEB;
+}
+video{
+  position:absolute;
+  right:10px;
+  bottom:10px;
+  width:120px;
+  border:2px solid white;
+}
+</style>
 </head>
+
 <body>
 
-<h2>🤚 Raise Your Finger Fast to Jump</h2>
-
-<canvas id="gameCanvas" width="600" height="300"></canvas>
+<canvas id="gameCanvas"></canvas>
 <video id="video" autoplay playsinline></video>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
@@ -42,62 +37,156 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+// ----------- GAME VARIABLES -----------
+let groundHeight = 60;
 let player = {
   x:100,
-  y:220,
+  y:0,
   width:40,
   height:40,
   velocityY:0,
-  gravity:0.8,
-  jumping:false
+  gravity:1,
+  jumping:false,
+  speed:6
 };
-let speed =3;
-function drawPlayer(){
-  ctx.fillStyle="red";
-  ctx.fillRect(player.x, player.y, player.width, player.height);
+
+function resetGround(){
+  player.y = canvas.height - groundHeight - player.height;
+}
+resetGround();
+
+let obstacles = [];
+let obstacleTimer = 0;
+let score = 0;
+let gameOver = false;
+
+// ----------- CONTROLS -----------
+let keys = {};
+
+document.addEventListener("keydown", e=> keys[e.key]=true);
+document.addEventListener("keyup", e=> keys[e.key]=false);
+
+canvas.addEventListener("touchstart", ()=>{
+  jump();
+});
+
+// ----------- FUNCTIONS -----------
+function jump(){
+  if(!player.jumping){
+    player.velocityY = -18;
+    player.jumping = true;
+  }
+}
+
+function spawnObstacle(){
+  obstacles.push({
+    x: canvas.width,
+    width: 30,
+    height: 40,
+    speed: 7
+  });
 }
 
 function updatePlayer(){
   player.velocityY += player.gravity;
   player.y += player.velocityY;
-  player.x+=speed;
 
-  if(player.y > 220){
-    player.y = 220;
+  let groundY = canvas.height - groundHeight - player.height;
+
+  if(player.y > groundY){
+    player.y = groundY;
     player.velocityY = 0;
     player.jumping = false;
   }
+
+  // X movement
+  if(keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
+  if(keys["d"] || keys["ArrowRight"]) player.x += player.speed;
+
+  if(player.x < 0) player.x = 0;
+  if(player.x + player.width > canvas.width)
+    player.x = canvas.width - player.width;
 }
 
-function jump(){
-  if(!player.jumping){
-    player.velocityY = -15;
-    player.jumping = true;
+function updateObstacles(){
+  obstacleTimer++;
+  if(obstacleTimer > 80){
+    spawnObstacle();
+    obstacleTimer = 0;
+  }
+
+  for(let i=0;i<obstacles.length;i++){
+    obstacles[i].x -= obstacles[i].speed;
+
+    let obsY = canvas.height - groundHeight - obstacles[i].height;
+
+    ctx.fillStyle="black";
+    ctx.fillRect(obstacles[i].x, obsY,
+                 obstacles[i].width, obstacles[i].height);
+
+    // Collision
+    if(player.x < obstacles[i].x + obstacles[i].width &&
+       player.x + player.width > obstacles[i].x &&
+       player.y < obsY + obstacles[i].height &&
+       player.y + player.height > obsY){
+       gameOver = true;
+    }
+
+    if(obstacles[i].x + obstacles[i].width < 0){
+      obstacles.splice(i,1);
+      score++;
+      i--;
+    }
   }
 }
 
+function drawPlayer(){
+  ctx.fillStyle="red";
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+}
+
+// ----------- GAME LOOP -----------
 function gameLoop(){
+  if(gameOver){
+    ctx.fillStyle="white";
+    ctx.font="40px Arial";
+    ctx.fillText("GAME OVER", canvas.width/2-120, canvas.height/2);
+    ctx.fillText("Score: "+score, canvas.width/2-70, canvas.height/2+50);
+    return;
+  }
+
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   ctx.fillStyle="green";
-  ctx.fillRect(0,260,600,40);
+  ctx.fillRect(0, canvas.height-groundHeight,
+               canvas.width, groundHeight);
 
   updatePlayer();
+  updateObstacles();
   drawPlayer();
+
+  ctx.fillStyle="black";
+  ctx.font="22px Arial";
+  ctx.fillText("Score: "+score,20,40);
 
   requestAnimationFrame(gameLoop);
 }
 gameLoop();
 
 
-// ---------------- HAND TRACKING ----------------
-
+// ----------- HAND TRACKING -----------
 const videoElement = document.getElementById('video');
 
 const hands = new Hands({
-  locateFile: (file) => {
-    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-  }
+  locateFile: file =>
+  `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
 
 hands.setOptions({
@@ -106,6 +195,37 @@ hands.setOptions({
   minDetectionConfidence: 0.7,
   minTrackingConfidence: 0.7
 });
+
+let previousY = null;
+
+hands.onResults(results=>{
+  if(results.multiHandLandmarks.length > 0){
+    let tip = results.multiHandLandmarks[0][8];
+    let currentY = tip.y;
+
+    if(previousY !== null){
+      let diff = previousY - currentY;
+      if(diff > 0.08){
+        jump();
+      }
+    }
+    previousY = currentY;
+  }
+});
+
+const camera = new Camera(videoElement,{
+  onFrame: async ()=>{
+    await hands.send({image: videoElement});
+  },
+  width:640,
+  height:480
+});
+camera.start();
+
+</script>
+
+</body>
+</html>});
 
 let previousY = null;
 
