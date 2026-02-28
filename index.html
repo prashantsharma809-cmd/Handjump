@@ -51,7 +51,7 @@ let player = {
   gravity:0.8,
   jumping:false
 };
-
+let speed =3;
 function drawPlayer(){
   ctx.fillStyle="red";
   ctx.fillRect(player.x, player.y, player.width, player.height);
@@ -60,6 +60,7 @@ function drawPlayer(){
 function updatePlayer(){
   player.velocityY += player.gravity;
   player.y += player.velocityY;
+  player.x+=speed;
 
   if(player.y > 220){
     player.y = 220;
